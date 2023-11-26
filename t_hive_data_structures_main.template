@@ -1,0 +1,20 @@
+-- create {{values.dbname}}.{{values.tablename}} table 
+ 
+set hive.exec.dynamic.partition=true; 
+set hive.exec.dynamic.partition.mode=nonstrict;
+ 
+drop table if exists {{values.dbname}}.{{values.tablename}};
+ 
+create table {{values.dbname}}.{{values.tablename}} (
+    {% for tableitem in values.table -%}
+    {% if tableitem.columnname == "load_ts" -%}
+    {{tableitem.columnname}} timestamp{{tableitem.linefeed}}
+    {%- elif tableitem.columnname == "filename" -%}
+    {{tableitem.columnname}} varchar(256){{tableitem.linefeed}}
+    {%- else -%}
+    {{tableitem.columnname}} {{tableitem.datatype}}{{tableitem.linefeed}}
+    {%- endif %}
+    {% endfor %}
+) partitioned by (event_id int) 
+ stored as parquet 
+tblproperties ('PARQUET.COMPRESS'='SNAPPY');
