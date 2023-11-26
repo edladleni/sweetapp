@@ -1,0 +1,52 @@
+{
+    "global":[{"env_upper":"{{ENV_UPPER}}"},{"env_lower":"{{ENV_LOWER}}"},{"output_type":"hql"}],
+    "group_by":{"sheet":"Attributes","start":"b2"},
+    "mapping":[
+        {
+            "sheet":"Attributes","label":"table","type":"table","start":"a2","colcount":11,
+            "group_by":{"label":"tablename","index":2},
+            "headinglabels":[
+                {"label":"columnname","index":3,"alter_index":4},
+                {"label":"datatype","index":5},
+                {"label":"columnmapping","index":8,"alter_index":11,
+                    "condition":[
+                        {"alter_index":4,"equal":"filename","result":"case when regexp_replace(reverse(split(reverse(INPUT__FILE__NAME),  '/') [0]),'.HDFS_CSV','') is null then assert_true(1=2) when regexp_replace(reverse(split(reverse(INPUT__FILE__NAME),  '/') [0]),'.HDFS_CSV','') = '' then assert_true(1=2) when regexp_replace(reverse(split(reverse(INPUT__FILE__NAME),  '/') [0]),'.HDFS_CSV','') RLIKE '^.{1,80}$' then cast(trim(regexp_replace(reverse(split(reverse(INPUT__FILE__NAME),  '/') [0]),'.HDFS_CSV','')) as varchar(80)) else assert_true(1=2) end"},
+                        {"equal":"varchar","result":"case when %columnname% is null then null when %columnname% = '' then null when %columnname% RLIKE '^.{1,256}$' then cast(trim(%columnname%) as varchar(256)) else assert_true(1=2) end"},
+                        {"equal":"date","result":"case when trim(%columnname%) is null then null when trim(%columnname%) = '' then null when cast(from_unixtime(unix_timestamp(trim(%columnname%),'dd/MM/yyyy'),'yyyy-MM-dd') as timestamp) is not null and cast(from_unixtime(unix_timestamp(trim(%columnname%),'dd/MM/yyyy'),'dd/MM/yyyy') as varchar(10)) = trim(%columnname%) then cast(from_unixtime(unix_timestamp(trim(%columnname%),'dd/MM/yyyy'),'yyyy-MM-dd') as timestamp) else assert_true(1=2) end"},
+                        {"equal":"double","result":"case when %columnname% is null then null when %columnname% = '' then null when trim(%columnname%) RLIKE '^-?([0-9]{0,30}(.[0-9]{0,30})?)?$' then cast(trim(%columnname%) as double) when trim(%columnname%) RLIKE '^-?([+-][0-9]{1,30}(.[0-9]{0,30})?)?$' then cast(trim(%columnname%) as double) else assert_true(1=2) end"},
+                        {"equal":"decimal","result":"case when %columnname% is null then null when %columnname% = '' then null when trim(%columnname%) RLIKE '^-?([0-9]{1,10}(\\.[0-9]{0,6})?)?$' then cast(trim(%columnname%) as decimal(10,6)) when trim(%columnname%) RLIKE '^-?([\\+\\-][0-9]{1,10}(\\.[0-9]{0,6})?)?$' then cast(trim(%columnname%) as decimal(10,6)) else assert_true(1=2) end"}
+                    ],
+                    "find_and_replace":[
+                        {"find":"%columnname%","replace_index":3},
+                        {"find":"\\","replace_value":"\\\\"}
+                    ]
+                }                
+            ],
+            "linefeed":","
+        },
+        {
+            "sheet":"Attributes","label":"tablename","type":"group_by"
+        },
+        {
+            "sheet":"Attributes","label":"dbname","type":"value","start":"a2"
+        },
+        {
+            "sheet":"Tables","label":"workload_upper","type":"value","start":"a2","action":"upcase"
+        },
+        {
+            "sheet":"Tables","label":"workload_lower","type":"value","start":"a2","action":"lowcase"
+        },
+        {
+            "sheet":"Tables","label":"hdfsfilelocation_upper","type":"value","start":"b2","action":"upcase"
+        },
+        {
+            "sheet":"Tables","label":"hdfsfilelocation_lower","type":"value","start":"b2","action":"lowcase"
+        },
+        {
+            "sheet":"Tables","label":"source_upper","type":"value","start":"c2","action":"upcase"
+        },
+        {
+            "sheet":"Tables","label":"source_lower","type":"value","start":"c2","action":"lowcase"
+        }
+    ]
+}

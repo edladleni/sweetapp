@@ -1,0 +1,36 @@
+{
+    "globals":[
+        {"label":"workload_upper","input":"y","description":"What is the workload?","action":"upcase"},
+        {"label":"source_upper","input":"y","description":"What is the source?","action":"upcase"},
+        {"label":"workload_lower","start":"globals::workload_upper","action":"lowcase"},
+        {"label":"source_lower","start":"globals::source_upper","action":"lowcase"}
+    ],
+    "objects":{
+        "identifier":"entities",
+        "group_by":{"start":"name"},
+        "mapping_rules":[
+            {"label":"tablename_upper","start":"name","action":"upcase"},
+            {"label":"tablename","start":"name"}
+        ]
+    },
+    "attributes":{
+        "identifier":"attributes",
+        "mapping_rules":[
+            {"label":"columnname","start":"name"},
+            {"label":"columnname_lower","start":"name","action":"lowcase"},
+            {"label":"datatype","start":"dataType",
+            "condition":[
+                {"equal":"varchar","result":"string"},
+                {"equal":"char","result":"string"},
+                {"equal":"timestamp","result":"date"},
+                {"equal":"dateTime","result":"datetime"},
+                {"equal":"guid","result":"string"},
+                {"equal":"int64","result":"int"},
+                {"equal":"dateTimeOffset","result":"datetime"},
+                {"equal":"decimal","result":"bytes"}
+            ]
+            },
+            {"label":"datasize","start":"maxLength"}
+        ]
+    }
+}

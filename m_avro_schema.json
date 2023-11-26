@@ -1,0 +1,45 @@
+{
+    "global":[{"env_upper":"{{ENV_UPPER}}"},{"env_lower":"{{ENV_LOWER}}"},{"output_type":"avsc"}],
+    "group_by":{"sheet":"Attributes","start":"b2"},
+    "mapping":[
+        {
+            "sheet":"Attributes","label":"table","type":"table","start":"a2","colcount":11,
+            "group_by":{"label":"tablename","index":2},
+            "headinglabels":[
+                {"label":"columnname","index":3,"alter_index":4,"exclusion":{"list":["load_dts","filename"],"validatecase":"N"}},
+                {"label":"datatype","index":5,"action":"extract_alpha",
+                "condition":[
+                    {"equal":"varchar","result":"string"},
+                    {"equal":"char","result":"string"},
+                    {"equal":"timestamp","result":"date"}
+                ]
+                },
+                {"label":"datasize","index":5,"action":"extract_numeric"},
+                {"label":"nullable","index":7}
+            ],
+            "linefeed":","
+        },
+        {
+            "sheet":"Attributes","label":"tablename","type":"group_by"
+        },
+        {
+            "sheet":"Attributes","label":"tablename_upper","type":"group_by","action":"upcase"
+        },
+        {
+            "sheet":"Attributes","label":"dbname","type":"value","start":"a2"
+        },
+        {
+            "sheet":"Tables","label":"workload_upper","type":"value","start":"b2","action":"upcase"
+        },
+        {
+            "sheet":"Tables","label":"workload_lower","type":"value","start":"b2","action":"lowcase"
+        },
+        {
+            "sheet":"Tables","label":"source_upper","type":"value","start":"c2","action":"upcase"
+        },
+        {
+            "sheet":"Tables","label":"source_lower","type":"value","start":"c2","action":"lowcase"
+        }
+
+    ]
+}
