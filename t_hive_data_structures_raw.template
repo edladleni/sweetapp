@@ -1,0 +1,35 @@
+{% set vars = namespace(last_tableitem="") %}
+{%- for tableitem in values.table -%}
+   {%- if tableitem.columnname == "load_ts" or tableitem.columnname == "filename" -%}
+   {%- else -%}
+      {% set vars.last_tableitem=tableitem.columnname -%}
+   {%- endif -%}
+{%- endfor -%}
+-- create {{values.dbname}}.{{values.tablename}}_raw table 
+ 
+set hive.exec.dynamic.partition=true; 
+set hive.exec.dynamic.partition.mode=nonstrict;
+ 
+drop table if exists {{values.dbname}}.{{values.tablename}}_raw;
+ 
+create external table {{values.dbname}}.{{values.tablename}}_raw ( 
+   {% for tableitem in values.table -%}
+   {%- if not (tableitem.columnname == "load_ts" or tableitem.columnname == "filename") -%}
+   {{tableitem.columnname}} string{% if tableitem.columnname == vars.last_tableitem %}{% else %}{{tableitem.linefeed}}{% endif %}
+   {% endif -%}
+   {% endfor %}
+) partitioned by (event_id int) 
+ row format serde 
+    'org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe' 
+with serdeproperties ( 
+   'field.delim'='|', 
+   'serialization.format'='\u0001') 
+stored as inputformat 
+   'org.apache.hadoop.mapred.TextInputFormat' 
+outputformat 
+   'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat' 
+location 
+   'hdfs://nameservice1/tenants/groupbi/dev/hdfs/raw/{{values.workload_lower}}/{{values.hdfsfilelocation_lower}}/{{values.tablename}}' 
+tblproperties ( 
+   'skip.header.line.count'='1', 
+   'serialization.encoding'='ISO-8859-1');

@@ -1,0 +1,53 @@
+{
+	"name":"SBI.DEV.DP.ING.{{values.workload_upper}}_{{values.source_upper}}_{{values.tablename_upper}}",
+	"type":"record",
+	"namespace":"SBI.DEV.DP.ING",
+	"fields": [
+		{% for tableitem in values.table -%}
+		{%- if tableitem.columnname -%}
+		{
+			"name":"{{tableitem.columnname_lower}}",
+			"sourceName":"{{tableitem.columnname}}",
+			"type":[
+				"null",
+				{
+					{% if tableitem.datatype == "string" -%}
+					"type":"string"{% if tableitem.datasize -%},
+					"maxLength":{{tableitem.datasize}}{%- endif %},
+					"trim": true
+					{%- elif tableitem.datatype == "date" -%}
+					"type": "int",
+					"logicalType": "date",
+					"validationMethod": "Pattern",
+					"pattern": "M/d/yy H:mm"
+					{%- elif tableitem.datatype == "datetime" -%}
+					"type": "long",
+					"logicalType": "timestamp-millis",
+					"validationMethod": "Pattern",
+					"pattern": "M/d/yy H:mm"
+					{%- elif tableitem.datatype == "bytes" -%}
+					"type": "bytes",
+					"logicalType": "decimal",
+					"precision": 38,
+					"scale": 10
+					{%- elif tableitem.datatype == "boolean" -%}
+					"type": "boolean",
+					"validationMethod": "TrueOrFalse"
+					{%- elif tableitem.datatype == "double" -%}
+					"type": "double",
+					"replace": [
+						{
+							"replaceText": ",",
+							"withText": ""
+						}
+					]
+					{%- else -%}
+					"type":"{{tableitem.datatype}}"
+					{%- endif %}
+				}
+			]
+		}{{tableitem.linefeed}}
+		{% endif %}
+		{%- endfor %}
+	]
+}

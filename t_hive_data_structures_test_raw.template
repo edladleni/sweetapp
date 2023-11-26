@@ -1,0 +1,27 @@
+ 
+with validate_me as 
+(
+select 
+	{% for tableitem in values.table -%}
+	{{tableitem.columnmapping}} as {{tableitem.columnname}}_test,
+	{{tableitem.columnname}}{{tableitem.linefeed}}
+	{% endfor %}
+    current_timestamp() as load_ts_test,
+    current_timestamp() as load_ts, 
+    reverse(split(reverse(INPUT__FILE__NAME), 
+'/') [0]) as filename_test,
+    reverse(split(reverse(INPUT__FILE__NAME), 
+'/') [0]) as filename,
+    ${event_id} as event_id 
+from {{values.dbname}}.{{values.tablename}}_raw 
+where event_id = ${event_id} 
+)
+select * from validate_me 
+where 
+{% for tableitem in values.table -%}
+nvl({{tableitem.columnname}}_test, 'NULL NOT FAILED') = 'FAILED' or
+{{tableitem.columnname}}{{tableitem.linefeed}}
+{% endfor %}
+nvl(load_ts_test, 'NULL NOT FAILED') = 'FAILED' or
+nvl(filename_test, 'NULL NOT FAILED') = 'FAILED'
+;

@@ -1,0 +1,238 @@
+{
+    "customAttributes": {
+        "file.directory": "./BIDS_{{values.env_upper}}_BI_INGESTION/{{values.workload_upper}}/{{values.source_upper}}/",
+        "hive.tableName": "{{values.tablename}}",
+        "hive.databaseName": "groupbi_{{values.workload_lower}}_{{values.source_lower}}_{{values.env_lower}}",
+        "hive.statement": "msck repair table {{values.dbname}}.{{values.tablename}}_raw;
+        set hive.exec.dynamic.partition=true;
+        set hive.exec.dynamic.partition.mode=nonstrict;
+        set hive.cbo.enable = false;
+        with validate as  
+        (
+            select
+            {% for tableitem in values.table -%}
+            {{tableitem.columnmapping}} as {{tableitem.columnname}}{{tableitem.linefeed}}
+            {% endfor %}
+            ,${log.jobId} as event_id
+            from {{values.dbname}}.{{values.tablename}}_raw where event_id = ${log.jobId}
+        ) 
+        insert into {{values.dbname}}.{{values.tablename}} partition (event_id)
+        ({% for tableitem in values.table %}{{tableitem.columnname}}{{tableitem.linefeed}}{% endfor %})
+        select {% for tableitem in values.table %}{{tableitem.columnname}}{{tableitem.linefeed}}{% endfor %} from validate;
+        set hive.cbo.enable = true;
+        ",
+        "hdfs.directory": "/tenants/groupbi/{{values.env_lower}}/hdfs/raw/{{values.workload_lower}}/{{values.hdfsfilelocation_lower}}/{{values.tablename}}/event_id=${log.jobId}",
+        "file.checkForDuplicate": "false",
+        "file.name": "${extevt.fileshare.fileName:isEmpty():ifElse(${extevt.http.file.fileName}, ${extevt.fileshare.fileName})}",
+        "controls.fileSize.check": "false",
+        "controls.fileSize.variance": "1",
+        "controls.fileSize.minHistory": "5",
+        "controls.fileSize.maxHistory": "24",
+        "controls.rowCount.check": "false",
+        "controls.rowCount.variance": "0.5",
+        "controls.rowCount.minHistory": "5",
+        "controls.rowCount.maxHistory": "24"
+    },
+    "components": [
+        {
+            "schemaVersion": 1,
+            "schemaName": "DATAPIPELINE.COMP.{{values.env_upper}}.LIST_DIRECTORY",
+            "type": "ListDirectory",
+            "version": 1,
+            "isFirstComponent": true,
+            "id": "list",
+            "allowsManyOutputs": true,
+            "config": {
+                "maxMatches": 1,
+                "directory": "${prop.file.directory}/TO_BE_PROCESSED",
+                "fileName": "${prop.file.name}"
+            }
+        },
+        {
+            "id": "check_for_duplicate",
+            "isFirstComponent": false,
+            "schemaName": "DATAPIPELINE.COMP.{{values.env_upper}}.HANA_STMNT",
+            "schemaVersion": 1,
+            "type": "HanaStatement",
+            "version": 1,
+            "allowsManyOutputs": true,
+            "config": {
+                "statement": "CALL \"SBI_DATA_PIPELINE\".\"bi.bt.SBI_DATA_PIPELINE.procedures.logs::CHECK_ATTRIBUTE_DOESNT_EXIST\" ('${tenant}', '${solution}', '${source}', 'DP_COPY_FILE', 'DP_FILE_NAME', '${fileshare.fileName}', 'SUCCESS');"
+            }
+        },
+        {
+            "id": "copy",
+            "isFirstComponent": false,
+            "schemaName": "DATAPIPELINE.COMP.{{values.env_upper}}.COPYFILE",
+            "schemaVersion": 1,
+            "type": "CopyFile",
+            "version": 1,
+            "allowsManyOutputs": true,
+            "config": {
+                "directory": "${prop.file.directory}/TO_BE_PROCESSED",
+                "fileName": "${fileshare.fileName}",
+                "hdfsDirectory": "${prop.hdfs.directory}"
+            }
+        },
+        {
+            "id": "move_to_error",
+            "isFirstComponent": false,
+            "schemaName": "DATAPIPELINE.COMP.{{values.env_upper}}.COPYFILE",
+            "schemaVersion": 1,
+            "type": "CopyFile",
+            "version": 1,
+            "allowsManyOutputs": true,
+            "config": {
+                "directory": "${prop.file.directory}/TO_BE_PROCESSED",
+                "fileName": "${fileshare.fileName}",
+                "moveToDirectory": "${prop.file.directory}/ERROR"
+            }
+        },
+        {
+            "id": "insert",
+            "isFirstComponent": false,
+            "schemaName": "DATAPIPELINE.COMP.{{values.env_upper}}.HIVE_STMNT",
+            "schemaVersion": 1,
+            "type": "HiveStatement",
+            "version": 1,
+            "allowsManyOutputs": true,
+            "config": {
+                "preQuery": "${prop.hive.statement:replaceAll('\\$\\[DB\\]', ${prop.hive.databaseName}):replaceAll('\\$\\[TABLE\\]', ${prop.hive.tableName})}",
+                "statement": "SELECT COUNT(*) as ingest_count FROM ${prop.hive.databaseName}.${prop.hive.tableName} WHERE event_id=${log.jobId}"
+            }
+        },
+        {
+            "id": "archive",
+            "isFirstComponent": false,
+            "schemaName": "DATAPIPELINE.COMP.{{values.env_upper}}.COPYFILE",
+            "schemaVersion": 1,
+            "type": "CopyFile",
+            "version": 1,
+            "allowsManyOutputs": true,
+            "config": {
+                "directory": "${prop.file.directory}/TO_BE_PROCESSED",
+                "fileName": "${fileshare.fileName}",
+                "newFileName": "${fileshare.fileName}_${now():format(\"yyyyMMddHHMMss\")}.zip",
+                "moveToDirectory": "${prop.file.directory}/PROCESSED",
+                "compress": true
+            }
+        },
+        {
+            "id": "log_rtas",
+            "isFirstComponent": false,
+            "schemaName": "DATAPIPELINE.COMP.{{values.env_upper}}.HANA_STMNT",
+            "schemaVersion": 1,
+            "type": "HanaStatement",
+            "version": 1,
+            "allowsManyOutputs": true,
+            "config": {
+                "statement": "DO BEGIN\n\tDECLARE VAR_RTA_ID BIGINT;\nCALL \"SBI_AFM\".\"bi.ddl.SBI_AFM.procedures::SP_LOAD_AFM_LOG_EVENT_RTA\"(P_EVENT_ID => ${log.jobId}, P_ATTRIBUTE_NM => 'DP_FILE_NAME', P_ATTRIBUTE_VALUE_TX => '${fileshare.fileName}', P_EVENT_RTA_ID => VAR_RTA_ID);\n\tCALL \"SBI_AFM\".\"bi.ddl.SBI_AFM.procedures::SP_LOAD_AFM_LOG_EVENT_RTA\"(P_EVENT_ID => ${log.jobId}, P_ATTRIBUTE_NM => 'DP_INGEST_FILE_SIZE_MB', P_ATTRIBUTE_VALUE_TX => '${fileshare.fileSize}', P_EVENT_RTA_ID => VAR_RTA_ID);\n\tCALL \"SBI_AFM\".\"bi.ddl.SBI_AFM.procedures::SP_LOAD_AFM_LOG_EVENT_RTA\"(P_EVENT_ID => ${log.jobId}, P_ATTRIBUTE_NM => 'DP_INGEST_ROW_COUNT', P_ATTRIBUTE_VALUE_TX => '${hive.sql.ingest_count}', P_EVENT_RTA_ID => VAR_RTA_ID);\nEND;"
+            }
+        },
+        {
+            "id": "check_file_size",
+            "isFirstComponent": false,
+            "schemaName": "DATAPIPELINE.COMP.{{values.env_upper}}.META_CONTROLS",
+            "schemaVersion": 1,
+            "type": "MetadataControls",
+            "version": 1,
+            "allowsManyOutputs": true,
+            "config": {
+                "use": "DP_INGEST_FILE_SIZE_MB",
+                "rules": [
+                    {
+                        "type": "stdev",
+                        "value": "${extevt.http.controls.fileSize.variance:isEmpty():ifElse(0.5, ${extevt.http.controls.fileSize.variance})}",
+                        "maxHistory": "${extevt.http.controls.fileSize.maxHistory:isEmpty():ifElse(12, ${extevt.http.controls.fileSize.maxHistory})}",
+                        "minHistory": "${extevt.http.controls.fileSize.minHistory:isEmpty():ifElse(5, ${extevt.http.controls.fileSize.minHistory})}",
+                        "action": "warn"
+                    }
+                ]
+            }
+        },
+        {
+            "id": "check_row_count",
+            "isFirstComponent": false,
+            "schemaName": "DATAPIPELINE.COMP.{{values.env_upper}}.META_CONTROLS",
+            "schemaVersion": 1,
+            "type": "MetadataControls",
+            "version": 1,
+            "allowsManyOutputs": true,
+            "config": {
+                "use": "DP_INGEST_ROW_COUNT",
+                "rules": [
+                    {
+                        "type": "stdev",
+                        "value": "${extevt.http.controls.rowCount.variance:isEmpty():ifElse(0.5, ${extevt.http.controls.rowCount.variance})}",
+                        "maxHistory": "${extevt.http.controls.rowCount.maxHistory:isEmpty():ifElse(12, ${extevt.http.controls.rowCount.maxHistory})}",
+                        "minHistory": "${extevt.http.controls.rowCount.minHistory:isEmpty():ifElse(5, ${extevt.http.controls.rowCount.minHistory})}",
+                        "action": "warn"
+                    }
+                ]
+            }
+        }
+    ],
+    "connections": [
+        {
+            "from": "list",
+            "to": "check_for_duplicate",
+            "condition": "${extevt.http.file.checkForDuplicate:isEmpty():ifElse(${prop.file.checkForDuplicate}, ${extevt.http.file.checkForDuplicate:toLower():equals('true')})}"
+        },
+        {
+            "from": "check_for_duplicate",
+            "to": "move_to_error",
+            "condition": "${extevt.http.dev.skipError:isEmpty():ifElse(true, ${extevt.http.dev.skipError:toLower():equals('true'):not()})}",
+            "relationship": "failure"
+        },
+        {
+            "from": "check_for_duplicate",
+            "to": "copy"
+        },
+        {
+            "from": "list",
+            "to": "copy",
+            "condition": "${prop.file.checkForDuplicate:not()}"
+        },
+        {
+            "from": "copy",
+            "to": "insert"
+        },
+        {
+            "from": "copy",
+            "to": "move_to_error",
+            "condition": "${extevt.http.dev.skipError:isEmpty():ifElse(true, ${extevt.http.dev.skipError:toLower():equals('true'):not()})}",
+            "relationship": "failure"
+        },
+        {
+            "from": "insert",
+            "to": "log_rtas"
+        },
+        {
+            "from": "log_rtas",
+            "to": "archive",
+            "condition": "${extevt.http.dev.skipArchive:isEmpty():ifElse(true, ${extevt.http.dev.skipArchive:toLower():equals('true'):not()})}"
+        },
+        {
+            "from": "log_rtas",
+            "to": "move_to_error",
+            "condition": "${extevt.http.dev.skipError:isEmpty():ifElse(true, ${extevt.http.dev.skipError:toLower():equals('true'):not()})}",
+            "relationship": "failure"
+        },
+        {
+            "from": "insert",
+            "to": "move_to_error",
+            "condition": "${extevt.http.dev.skipError:isEmpty():ifElse(true, ${extevt.http.dev.skipError:toLower():equals('true'):not()})}",
+            "relationship": "failure"
+        },
+        {
+            "from": "log_rtas",
+            "to": "check_file_size",
+            "condition": "${extevt.http.controls.fileSize.check:isEmpty():ifElse(${prop.controls.fileSize.check}, ${extevt.http.controls.fileSize.check})}"
+        },
+        {
+            "from": "log_rtas",
+            "to": "check_row_count",
+            "condition": "${extevt.http.controls.rowCount.check:isEmpty():ifElse(${prop.controls.rowCount.check}, ${extevt.http.controls.rowCount.check})}"
+        }
+    ]
+}
